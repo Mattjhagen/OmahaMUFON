@@ -322,23 +322,45 @@ function initRewindControls() {
         }
     });
 
-    // Radius change: refresh rewind data AND zoom map to fit radius
+    // Radius "Go" button: apply selected radius
+    const radiusGoBtn = document.getElementById('radius-go-btn');
     const radiusSelect = document.getElementById('search-radius');
-    radiusSelect.addEventListener('change', () => {
-        if (rewindMode && currentRewindTime && currentRewindLat && currentRewindLon) {
-            const newRadius = parseInt(radiusSelect.value) || 25;
-            console.log(`[REWIND] Radius changed to ${newRadius} mi, refreshing...`);
+
+    radiusGoBtn.onclick = () => {
+        const newRadius = parseInt(radiusSelect.value) || 25;
+        const sliderValue = parseInt(timeSlider.value);
+
+        console.log(`[REWIND] Radius Go button clicked: ${newRadius} mi`);
+
+        if (sliderValue === 288) {
+            // Currently at LIVE position - show alert
+            alert('Radius search works in rewind mode. Drag the time slider back to search past aircraft within the selected radius.');
+            return;
+        }
+
+        // In rewind mode - refresh with new radius
+        if (rewindMode && currentRewindTime) {
+            const lat = currentRewindLat || map.getCenter().lat;
+            const lon = currentRewindLon || map.getCenter().lng;
 
             // Calculate appropriate zoom level for the radius
             const zoomLevel = getZoomForRadius(newRadius);
 
             // Zoom map to fit the new radius
-            map.setView([currentRewindLat, currentRewindLon], zoomLevel);
+            map.setView([lat, lon], zoomLevel);
 
             // Refresh rewind data with new radius
-            enterRewindMode(currentRewindTime, currentRewindLat, currentRewindLon, newRadius);
+            enterRewindMode(currentRewindTime, lat, lon, newRadius);
+        } else {
+            // Slider is back but rewind hasn't started - trigger it
+            const timestamp = sliderValueToTimestamp(sliderValue);
+            const center = map.getCenter();
+            const zoomLevel = getZoomForRadius(newRadius);
+
+            map.setView([center.lat, center.lng], zoomLevel);
+            enterRewindMode(timestamp.toISOString(), center.lat, center.lng, newRadius);
         }
-    });
+    };
 }
 
 function getZoomForRadius(radiusMiles) {
@@ -397,10 +419,7 @@ function handleSliderChange(sliderValue) {
         const center = map.getCenter();
         const radius = parseInt(document.getElementById('search-radius').value) || 25;
 
-        // Zoom map to fit the radius
-        const zoomLevel = getZoomForRadius(radius);
-        map.setView([center.lat, center.lng], zoomLevel);
-
+        // Enter rewind mode (zoom is controlled by radius Go button)
         enterRewindMode(timestamp.toISOString(), center.lat, center.lng, radius);
     }
 }
