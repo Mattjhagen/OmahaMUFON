@@ -1,0 +1,17 @@
+[Unit]
+Description=SkyRewind Merged Aircraft Proxy (OpenSky API)
+After=network.target
+
+[Service]
+Type=simple
+User=skyrewind
+Group=skyrewind
+WorkingDirectory=/opt/skyrewind-merged/services
+ExecStart=/usr/bin/python3 aircraft-proxy.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

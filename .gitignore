@@ -1,0 +1,49 @@
+# Databases - NEVER commit live databases
+data/*.db
+data/*.db-journal
+data/*.db-wal
+*.db
+*.db-journal
+*.db-wal
+
+# Credentials and secrets - NEVER commit these
+.cloudflared/
+*.json.credentials
+*token*
+*.pem
+*.key
+.env
+.env.*
+credentials.json
+secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+logs/
+
+# System
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary
+/tmp/
+*.tmp
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
