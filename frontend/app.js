@@ -322,15 +322,34 @@ function initRewindControls() {
         }
     });
 
-    // Radius change: if in rewind mode, refresh with new radius
+    // Radius change: refresh rewind data AND zoom map to fit radius
     const radiusSelect = document.getElementById('search-radius');
     radiusSelect.addEventListener('change', () => {
         if (rewindMode && currentRewindTime && currentRewindLat && currentRewindLon) {
             const newRadius = parseInt(radiusSelect.value) || 25;
             console.log(`[REWIND] Radius changed to ${newRadius} mi, refreshing...`);
+
+            // Calculate appropriate zoom level for the radius
+            const zoomLevel = getZoomForRadius(newRadius);
+
+            // Zoom map to fit the new radius
+            map.setView([currentRewindLat, currentRewindLon], zoomLevel);
+
+            // Refresh rewind data with new radius
             enterRewindMode(currentRewindTime, currentRewindLat, currentRewindLon, newRadius);
         }
     });
+}
+
+function getZoomForRadius(radiusMiles) {
+    // Calculate zoom level to fit radius in view
+    // Leaflet zoom levels (approximate coverage at center latitude ~41°):
+    // Zoom 14: ~3 miles, 13: ~6 mi, 12: ~12 mi, 11: ~25 mi, 10: ~50 mi, 9: ~100 mi
+    if (radiusMiles <= 5) return 13;
+    if (radiusMiles <= 12) return 12;
+    if (radiusMiles <= 25) return 11;
+    if (radiusMiles <= 50) return 10;
+    return 9; // 100+ miles
 }
 
 function sliderValueToTimestamp(sliderValue) {
@@ -377,6 +396,11 @@ function handleSliderChange(sliderValue) {
         const timestamp = sliderValueToTimestamp(sliderValue);
         const center = map.getCenter();
         const radius = parseInt(document.getElementById('search-radius').value) || 25;
+
+        // Zoom map to fit the radius
+        const zoomLevel = getZoomForRadius(radius);
+        map.setView([center.lat, center.lng], zoomLevel);
+
         enterRewindMode(timestamp.toISOString(), center.lat, center.lng, radius);
     }
 }
@@ -395,12 +419,16 @@ function jumpToSighting(index) {
 
     // Enter rewind mode at sighting's time and location
     const radius = parseInt(document.getElementById('search-radius').value) || 25;
+
+    // Zoom map to fit the radius around sighting location
+    const zoomLevel = getZoomForRadius(radius);
+    map.setView([sighting.lat, sighting.lon], zoomLevel);
+
     enterRewindMode(sighting.sighting_time, sighting.lat, sighting.lon, radius);
 
-    // Show the sighting details and center map
+    // Show the sighting details
     currentSightingIndex = index;
     showSightingDetail(index);
-    map.setView([sighting.lat, sighting.lon], 12);
     renderReportsList();
 }
 
