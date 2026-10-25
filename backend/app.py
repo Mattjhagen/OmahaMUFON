@@ -216,6 +216,34 @@ def favicon_ico():
     """Serve ICO favicon."""
     return send_from_directory(FRONTEND_PATH, 'favicon.ico', mimetype='image/x-icon')
 
+@app.route('/static/style.css')
+def serve_css():
+    """Serve main CSS file."""
+    return send_from_directory(FRONTEND_PATH, 'style.css', mimetype='text/css')
+
+@app.route('/static/app.js')
+def serve_js():
+    """Serve main JavaScript file."""
+    return send_from_directory(FRONTEND_PATH, 'app.js', mimetype='application/javascript')
+
+@app.route('/static/manifest.json')
+def serve_manifest():
+    """Serve PWA manifest via static path."""
+    return send_from_directory(FRONTEND_PATH, 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/static/icons/<path:filename>')
+def serve_icons(filename):
+    """Serve PWA icons via static path."""
+    icons_path = os.path.join(FRONTEND_PATH, 'icons')
+    return send_from_directory(icons_path, filename)
+
+@app.route('/static/sw.js')
+def serve_sw():
+    """Serve service worker via static path."""
+    response = send_from_directory(FRONTEND_PATH, 'sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
 @app.route('/icons/<path:filename>')
 def icons(filename):
     """Serve PWA icons."""
@@ -242,9 +270,10 @@ def rewind():
         # Parse center time
         center_dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
 
-        # Get observations within ±10 minutes
-        start_time = (center_dt - timedelta(minutes=10)).isoformat()
-        end_time = (center_dt + timedelta(minutes=10)).isoformat()
+        # Get observations within ±3 minutes (narrower window to reduce data)
+        # Frontend deduplicates to one position per aircraft closest to center_dt
+        start_time = (center_dt - timedelta(minutes=3)).isoformat()
+        end_time = (center_dt + timedelta(minutes=3)).isoformat()
 
         observations = get_rewind_observations(start_time, end_time, lat, lon, radius)
 
@@ -339,14 +368,6 @@ def confirm_sighting_endpoint(sighting_id):
         'already_confirmed': already_confirmed,
         'success': True
     })
-
-@app.route('/api/sightings/<int:sighting_id>', methods=['DELETE'])
-def delete_sighting_endpoint(sighting_id):
-    """Delete a sighting (for testing cleanup)."""
-    success = delete_sighting(sighting_id)
-    if not success:
-        return jsonify({'error': 'Sighting not found'}), 404
-    return jsonify({'success': True})
 
 @app.route('/api/uploads/<filename>')
 def serve_upload(filename):

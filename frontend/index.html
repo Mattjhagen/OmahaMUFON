@@ -5,17 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SKYREWIND UAP TRACKING NETWORK</title>
 
+    <!-- No-flash theme script (runs before render) -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('skyrewind-theme') || 'command';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            // Update theme-color meta for PWA
+            const themeColors = {
+                'command': '#0f1419',
+                'light': '#f5f7fa',
+                'high-contrast': '#000000',
+                'amber-terminal': '#0d0a00',
+                'red-black': '#000000'
+            };
+            const themeColorMeta = document.createElement('meta');
+            themeColorMeta.name = 'theme-color';
+            themeColorMeta.content = themeColors[savedTheme] || '#0f1419';
+            document.head.appendChild(themeColorMeta);
+        })();
+    </script>
+
     <!-- PWA -->
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#0f1419">
+
+    <!-- Favicons (UFO pixel-art icon, nearest-neighbor scaled) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" type="image/png" href="/static/icons/favicon-16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="/static/icons/favicon-32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/static/icons/favicon-48.png" sizes="48x48">
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SkyRewind">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -35,6 +58,17 @@
                 <button id="help-btn" class="btn-help" title="Show tutorial">?</button>
             </div>
             <div class="header-status">
+                <!-- Theme Switcher -->
+                <div class="theme-switcher">
+                    <label for="theme-select" class="theme-switcher-label">Theme</label>
+                    <select id="theme-select" title="Choose color theme">
+                        <option value="command">Command</option>
+                        <option value="light">Light</option>
+                        <option value="high-contrast">High Contrast</option>
+                        <option value="amber-terminal">Amber Terminal</option>
+                        <option value="red-black">Red & Black</option>
+                    </select>
+                </div>
                 <div class="status-indicator">
                     <div class="status-dot" id="status-dot"></div>
                     <span>ADS-B</span>
@@ -264,7 +298,8 @@
             <button class="mobile-menu-item" id="mobile-menu-report">📝 Report Sighting</button>
             <button class="mobile-menu-item" id="mobile-menu-chat">💬 Chat</button>
             <button class="mobile-menu-item" id="mobile-menu-notifications">🔔 Notifications</button>
-            <button class="mobile-menu-item" id="mobile-menu-tutorial">? Show Tutorial</button>
+            <button class="mobile-menu-item" id="mobile-menu-theme">🎨 Change Theme</button>
+            <button class="mobile-menu-item" id="mobile-menu-tutorial">❓ Show Tutorial</button>
             <button class="mobile-menu-item" id="mobile-menu-install">⬇️ Install App</button>
         </div>
     </div>
@@ -286,6 +321,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/app.js"></script>
+    <script src="/static/app.js"></script>
 </body>
 </html>

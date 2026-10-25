@@ -51,9 +51,16 @@ let currentRewindLon = null;
 let currentRewindRadius = 25;
 let notificationsEnabled = false;
 let pushSubscription = null;
+let currentTheme = localStorage.getItem('skyrewind-theme') || 'command';
+let currentTileLayer = null;
+let userLocationMarker = null;
+let userLocationCoords = null;
+let rewindRequestId = 0; // Track rewind requests to ignore stale responses
+let sliderDebounceTimer = null; // Debounce timer for slider changes
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initMap();
     initModals();
     initChat();
@@ -69,6 +76,127 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
 });
+
+// ===== THEME SYSTEM =====
+function initTheme() {
+    const themeSelect = document.getElementById('theme-select');
+
+    // Set initial theme in select
+    themeSelect.value = currentTheme;
+
+    // Theme change handler
+    themeSelect.addEventListener('change', (e) => {
+        changeTheme(e.target.value);
+    });
+
+    // Mobile menu theme button
+    const mobileThemeBtn = document.getElementById('mobile-menu-theme');
+    if (mobileThemeBtn) {
+        mobileThemeBtn.addEventListener('click', () => {
+            showMobileThemeModal();
+        });
+    }
+}
+
+function changeTheme(theme) {
+    currentTheme = theme;
+
+    // Update HTML attribute
+    document.documentElement.setAttribute('data-theme', theme);
+
+    // Save to localStorage
+    localStorage.setItem('skyrewind-theme', theme);
+
+    // Update theme-color meta for PWA
+    const themeColors = {
+        'command': '#0f1419',
+        'light': '#f5f7fa',
+        'high-contrast': '#000000',
+        'amber-terminal': '#0d0a00',
+        'red-black': '#000000'
+    };
+
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+        themeColorMeta.content = themeColors[theme] || '#0f1419';
+    }
+
+    // Update map basemap
+    if (map && currentTileLayer) {
+        updateMapBasemap(theme);
+    }
+
+    // Update theme select if changed via mobile
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        themeSelect.value = theme;
+    }
+}
+
+function updateMapBasemap(theme) {
+    // Remove existing tile layer
+    if (currentTileLayer) {
+        map.removeLayer(currentTileLayer);
+    }
+
+    // Choose basemap based on theme
+    if (theme === 'light') {
+        // Light basemap for light theme
+        currentTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            maxZoom: 16,
+            subdomains: 'abcd'
+        });
+    } else {
+        // Dark basemap for all other themes
+        currentTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri',
+            maxZoom: 16
+        });
+    }
+
+    currentTileLayer.addTo(map);
+}
+
+function showMobileThemeModal() {
+    const themes = [
+        { value: 'command', label: 'Command (Dark)' },
+        { value: 'light', label: 'Light' },
+        { value: 'high-contrast', label: 'High Contrast' },
+        { value: 'amber-terminal', label: 'Amber Terminal' },
+        { value: 'red-black', label: 'Red & Black' }
+    ];
+
+    const buttonsHtml = themes.map(t =>
+        `<button class="mobile-menu-item" onclick="changeTheme('${t.value}'); closeMobileMenu();" style="background: ${t.value === currentTheme ? 'var(--input-bg)' : 'var(--panel-bg)'}; border-color: ${t.value === currentTheme ? 'var(--accent)' : 'var(--panel-border)'};">${t.value === currentTheme ? '✓ ' : ''}${t.label}</button>`
+    ).join('');
+
+    // Use modal for theme selection on mobile
+    const modal = document.getElementById('report-modal');
+    const modalContent = modal.querySelector('.modal-content');
+    const modalHeader = modal.querySelector('.modal-header span');
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    modalHeader.textContent = 'Choose Theme';
+    modalContent.innerHTML = `<div style="display: flex; flex-direction: column; gap: 8px;">${buttonsHtml}</div>`;
+
+    modal.classList.add('active');
+    modalOverlay.classList.add('active');
+}
+
+function closeMobileMenu() {
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+
+    mobileMenu.classList.remove('active');
+    mobileMenuOverlay.classList.remove('active');
+
+    // Reset hamburger button
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    if (hamburgerBtn) {
+        hamburgerBtn.classList.remove('active');
+    }
+}
 
 // ===== AIRCRAFT CATEGORIZATION (Feature 1) =====
 function categorizeAircraft(callsign) {
@@ -99,11 +227,23 @@ function categorizeAircraft(callsign) {
 function initMap() {
     map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
-    // Dark tile layer
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri',
-        maxZoom: 16
-    }).addTo(map);
+    // Choose tile layer based on current theme
+    if (currentTheme === 'light') {
+        // Light basemap for light theme
+        currentTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            maxZoom: 16,
+            subdomains: 'abcd'
+        });
+    } else {
+        // Dark basemap for all other themes
+        currentTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri',
+            maxZoom: 16
+        });
+    }
+
+    currentTileLayer.addTo(map);
 
     // Add legend to flights panel
     addAircraftLegend();
@@ -151,10 +291,20 @@ function initRewindControls() {
         updateTimeReadout(sliderValue);
     });
 
-    // Slider change event (final value after release)
+    // Slider change event (debounced to prevent rapid-fire requests during dragging)
     timeSlider.addEventListener('change', (e) => {
         const sliderValue = parseInt(e.target.value);
-        handleSliderChange(sliderValue);
+
+        // Clear any pending debounce timer
+        if (sliderDebounceTimer) {
+            clearTimeout(sliderDebounceTimer);
+        }
+
+        // Debounce: wait 250ms after slider stops moving
+        sliderDebounceTimer = setTimeout(() => {
+            handleSliderChange(sliderValue);
+            sliderDebounceTimer = null;
+        }, 250);
     });
 
     // Back to live button
@@ -169,6 +319,16 @@ function initRewindControls() {
         const index = parseInt(e.target.value);
         if (!isNaN(index) && allSightings[index]) {
             jumpToSighting(index);
+        }
+    });
+
+    // Radius change: if in rewind mode, refresh with new radius
+    const radiusSelect = document.getElementById('search-radius');
+    radiusSelect.addEventListener('change', () => {
+        if (rewindMode && currentRewindTime && currentRewindLat && currentRewindLon) {
+            const newRadius = parseInt(radiusSelect.value) || 25;
+            console.log(`[REWIND] Radius changed to ${newRadius} mi, refreshing...`);
+            enterRewindMode(currentRewindTime, currentRewindLat, currentRewindLon, newRadius);
         }
     });
 }
@@ -258,9 +418,12 @@ async function enterRewindMode(time, lat, lon, radius) {
     modeBadge.className = 'mode-badge rewind';
     backToLiveBtn.style.display = 'inline-block';
 
-    // Clear live aircraft markers
+    // CRITICAL: Clear ALL markers (live AND rewind) before loading new rewind data
     Object.values(aircraftMarkers).forEach(marker => map.removeLayer(marker));
     aircraftMarkers = {};
+
+    Object.values(rewindMarkers).forEach(marker => map.removeLayer(marker));
+    rewindMarkers = {};
 
     // Stop live polling
     if (aircraftPollInterval) {
@@ -299,6 +462,9 @@ function exitRewindMode() {
 }
 
 async function loadRewindData(time, lat, lon, radius) {
+    // Increment request ID to track this request
+    const thisRequestId = ++rewindRequestId;
+
     try {
         const response = await fetch(
             `${API_BASE}/api/rewind?lat=${lat}&lon=${lon}&time=${time}&radius=${radius}`
@@ -306,14 +472,51 @@ async function loadRewindData(time, lat, lon, radius) {
 
         if (!response.ok) throw new Error('Failed to load rewind data');
 
-        const aircraft = await response.json(); // Returns array directly, not {aircraft: [...]}
+        const observations = await response.json(); // Returns array directly, not {aircraft: [...]}
 
-        // Clear old rewind markers
+        // CRITICAL: Ignore stale responses (a newer request was made while this one was in flight)
+        if (thisRequestId !== rewindRequestId) {
+            console.log(`[REWIND] Ignoring stale response ${thisRequestId} (current: ${rewindRequestId})`);
+            return;
+        }
+
+        // CRITICAL: Clear old rewind markers AGAIN before rendering (in case multiple calls raced)
         Object.values(rewindMarkers).forEach(marker => map.removeLayer(marker));
         rewindMarkers = {};
 
-        if (Array.isArray(aircraft) && aircraft.length > 0) {
-            aircraft.forEach(a => {
+        console.log(`[REWIND] Processing ${observations.length} raw observations`);
+
+        if (Array.isArray(observations) && observations.length > 0) {
+            // DEDUPLICATE: Group by icao_hex and keep only the closest timestamp to requested time
+            const requestedTime = new Date(time).getTime();
+            const aircraftMap = new Map();
+
+            observations.forEach(obs => {
+                const icao = obs.icao_hex;
+                if (!icao) {
+                    console.warn('[REWIND] Skipping observation with missing icao_hex:', obs);
+                    return;
+                }
+
+                const obsTime = new Date(obs.timestamp).getTime();
+                const timeDiff = Math.abs(requestedTime - obsTime);
+
+                if (!aircraftMap.has(icao)) {
+                    aircraftMap.set(icao, { obs, timeDiff });
+                } else {
+                    const existing = aircraftMap.get(icao);
+                    if (timeDiff < existing.timeDiff) {
+                        aircraftMap.set(icao, { obs, timeDiff });
+                    }
+                }
+            });
+
+            // Plot only the deduplicated aircraft (one position per aircraft)
+            const uniqueAircraft = Array.from(aircraftMap.values()).map(item => item.obs);
+
+            console.log(`[REWIND] Deduped to ${uniqueAircraft.length} unique aircraft`);
+
+            uniqueAircraft.forEach(a => {
                 const category = categorizeAircraft(a.callsign);
                 const config = AIRCRAFT_CATEGORIES[category];
 
@@ -357,12 +560,17 @@ async function loadRewindData(time, lat, lon, radius) {
                     .bindPopup(popupContent)
                     .addTo(map);
 
-                rewindMarkers[`${a.icao_hex}-${a.timestamp}`] = marker;
+                // CRITICAL: Store ONLY ONE marker per icao_hex (deduplicated)
+                // If a duplicate key somehow gets through, it will overwrite (not accumulate)
+                rewindMarkers[a.icao_hex] = marker;
             });
 
-            // Update flights count
-            document.getElementById('flights-count').textContent = aircraft.length;
-            document.getElementById('aircraft-count').textContent = aircraft.length;
+            // Update flights count with UNIQUE aircraft count
+            const finalMarkerCount = Object.keys(rewindMarkers).length;
+            console.log(`[REWIND] Rendered ${finalMarkerCount} markers on map`);
+
+            document.getElementById('flights-count').textContent = finalMarkerCount;
+            document.getElementById('aircraft-count').textContent = finalMarkerCount;
         } else {
             // No recorded aircraft for this time - honest empty state
             document.getElementById('flights-count').textContent = '0';
@@ -1303,13 +1511,39 @@ function initMobileMenu() {
 }
 
 // ===== MY LOCATION (GEOLOCATION) =====
-let userLocationMarker = null;
 
 function initMyLocation() {
     const myLocationBtn = document.getElementById('my-location-btn');
     if (!myLocationBtn) return;
 
-    myLocationBtn.onclick = findMyLocation;
+    myLocationBtn.onclick = () => {
+        // If marker exists and GPS coords are saved, snap back to GPS
+        if (userLocationMarker && userLocationCoords) {
+            const currentPos = userLocationMarker.getLatLng();
+            const gpsLat = userLocationCoords.lat;
+            const gpsLon = userLocationCoords.lon;
+
+            // Check if marker has been moved
+            const distance = Math.abs(currentPos.lat - gpsLat) + Math.abs(currentPos.lng - gpsLon);
+            if (distance > 0.0001) { // About 10 meters
+                // Snap back to GPS position
+                userLocationMarker.setLatLng([gpsLat, gpsLon]);
+                map.setView([gpsLat, gpsLon], map.getZoom());
+                showLocationReadout(gpsLat, gpsLon);
+                userLocationMarker.openPopup();
+
+                // Update rewind center
+                if (currentRewindLat !== null && currentRewindLon !== null) {
+                    currentRewindLat = gpsLat;
+                    currentRewindLon = gpsLon;
+                }
+                return;
+            }
+        }
+
+        // Otherwise, request GPS location
+        findMyLocation();
+    };
 }
 
 function findMyLocation() {
@@ -1330,25 +1564,14 @@ function findMyLocation() {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
 
+            // Save GPS coords for snap-back
+            userLocationCoords = { lat, lon };
+
             // Center map on user location
             map.setView([lat, lon], 12);
 
-            // Remove old user location marker if exists
-            if (userLocationMarker) {
-                map.removeLayer(userLocationMarker);
-            }
-
-            // Add "you are here" marker (distinct from aircraft/reports)
-            const icon = L.divIcon({
-                className: 'user-location-marker',
-                html: '<div class="user-location-marker"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
-
-            userLocationMarker = L.marker([lat, lon], { icon })
-                .bindPopup('<strong>You are here</strong>')
-                .addTo(map);
+            // Create or update draggable marker
+            createDraggableLocationMarker(lat, lon);
 
             // Offer to re-center rewind radius (don't silently change if user already set one)
             if (currentRewindLat !== null && currentRewindLon !== null) {
@@ -1356,10 +1579,16 @@ function findMyLocation() {
                     currentRewindLat = lat;
                     currentRewindLon = lon;
                 }
+            } else {
+                // First time - set rewind center to user location
+                currentRewindLat = lat;
+                currentRewindLon = lon;
             }
 
             myLocationBtn.classList.remove('locating');
             myLocationBtn.disabled = false;
+
+            showLocationReadout(lat, lon);
         },
         (error) => {
             myLocationBtn.classList.remove('locating');
@@ -1383,6 +1612,73 @@ function findMyLocation() {
             maximumAge: 0
         }
     );
+}
+
+function createDraggableLocationMarker(lat, lon) {
+    // Remove old marker if exists
+    if (userLocationMarker) {
+        map.removeLayer(userLocationMarker);
+    }
+
+    // Create draggable "you are here" marker (distinct from aircraft/reports)
+    const icon = L.divIcon({
+        className: 'user-location-marker-container',
+        html: '<div class="user-location-marker"></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    userLocationMarker = L.marker([lat, lon], {
+        icon: icon,
+        draggable: true,
+        autoPan: true
+    })
+    .bindPopup('<strong>Your location</strong><br><small>Drag to move</small>')
+    .addTo(map);
+
+    // Update coordinates on drag
+    userLocationMarker.on('drag', (e) => {
+        const pos = e.target.getLatLng();
+        showLocationReadout(pos.lat, pos.lng);
+
+        // Update rewind center if it was set to user location
+        if (currentRewindLat !== null && currentRewindLon !== null) {
+            currentRewindLat = pos.lat;
+            currentRewindLon = pos.lng;
+        }
+    });
+
+    userLocationMarker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        showLocationReadout(pos.lat, pos.lng);
+    });
+
+    // Open popup automatically to show drag hint
+    userLocationMarker.openPopup();
+}
+
+function showLocationReadout(lat, lon) {
+    // Create readout element if it doesn't exist
+    let readout = document.getElementById('location-readout');
+    if (!readout) {
+        readout = document.createElement('div');
+        readout.id = 'location-readout';
+        readout.className = 'location-readout monospace';
+        document.querySelector('.panel-map').appendChild(readout);
+    }
+
+    // Format coordinates to 5 decimal places
+    const latStr = lat.toFixed(5);
+    const lonStr = lon.toFixed(5);
+
+    readout.textContent = `📍 ${latStr}, ${lonStr}`;
+    readout.classList.add('active');
+
+    // Hide after 5 seconds (but show again on drag)
+    clearTimeout(window.locationReadoutTimer);
+    window.locationReadoutTimer = setTimeout(() => {
+        readout.classList.remove('active');
+    }, 5000);
 }
 
 function showLocationError(message) {
@@ -1431,8 +1727,8 @@ const TUTORIAL_STEPS = [
         content: 'Drag the time slider at the bottom to rewind 24 hours and see past aircraft. This helps check if your sighting matched a known flight. Tap "Back to Live" to return.'
     },
     {
-        title: 'Chat & Confirmations',
-        content: 'Use Group Chat to discuss sightings. Tap "I saw this too" on reports you witnessed. Tap the 📍 button to find your location on the map.'
+        title: 'Chat, Location & Themes',
+        content: 'Use Group Chat to discuss sightings. Tap "I saw this too" on reports you witnessed. The 📍 button finds your location (drag the pin to move it). Choose from 5 color themes in the header.'
     }
 ];
 

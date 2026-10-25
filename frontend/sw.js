@@ -1,13 +1,16 @@
 // SkyRewind Service Worker
 // Provides offline support and notification handling
 
-const CACHE_VERSION = 'skyrewind-v5-pwa';
+const CACHE_VERSION = 'skyrewind-v7-ufo-icons';
 const CACHE_URLS = [
   '/',
   '/static/style.css',
   '/static/app.js',
   '/static/manifest.json',
-  '/static/favicon.svg',
+  '/favicon.ico',
+  '/static/icons/favicon-16.png',
+  '/static/icons/favicon-32.png',
+  '/static/icons/favicon-48.png',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/apple-touch-icon.png'

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyRewind Admin - Moderation</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg, #0f1419);
+            color: var(--text, #e8ecef);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 15px;
+            line-height: 1.5;
+            padding: 20px;
+        }
+
+        /* Use Command theme by default */
+        :root {
+            --bg: #0f1419;
+            --panel-bg: #1e252d;
+            --panel-border: #5a9fb0;
+            --text: #e8ecef;
+            --text-muted: #9ba8b3;
+            --accent: #00d9ff;
+            --accent-hover: #33e0ff;
+            --success: #7dd87f;
+            --warning: #f4a261;
+            --error: #e76f6f;
+        }
+
+        .admin-header {
+            background: var(--panel-bg);
+            border: 2px solid var(--error);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(231, 111, 111, 0.3);
+        }
+
+        .admin-title {
+            color: var(--error);
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .admin-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .section {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            color: var(--accent);
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--panel-border);
+        }
+
+        .item {
+            background: var(--bg);
+            border: 1px solid var(--panel-border);
+            padding: 16px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .item-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .item-id {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .item-content {
+            color: var(--text);
+            margin-bottom: 6px;
+            word-break: break-word;
+        }
+
+        .item-meta {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .btn-delete {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-delete:hover {
+            opacity: 0.8;
+        }
+
+        .btn-delete:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-refresh {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            transition: background 0.2s;
+        }
+
+        .btn-refresh:hover {
+            background: var(--accent-hover);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px 20px;
+            font-size: 15px;
+        }
+
+        .log-entry {
+            background: var(--bg);
+            border: 1px solid var(--panel-border);
+            padding: 14px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .log-action {
+            color: var(--warning);
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .log-details {
+            color: var(--text);
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 20px;
+        }
+
+        @media screen and (max-width: 767px) {
+            body {
+                padding: 12px;
+            }
+
+            .admin-title {
+                font-size: 22px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .item {
+                flex-direction: column;
+            }
+
+            .btn-delete {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <div class="admin-title">⚠️ ADMIN PANEL</div>
+        <div class="admin-subtitle">SkyRewind Moderation Interface - uap.mattjhagen.xyz</div>
+    </div>
+
+    <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-reports">-</div>
+            <div class="stat-label">Total Reports</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-chat">-</div>
+            <div class="stat-label">Total Chat Messages</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-confirmations">-</div>
+            <div class="stat-label">Total Confirmations</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-modlog">-</div>
+            <div class="stat-label">Moderation Actions</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">UAP Reports</div>
+        <button class="btn-refresh" onclick="loadReports()">Refresh Reports</button>
+        <div id="reports-list"></div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Chat Messages</div>
+        <button class="btn-refresh" onclick="loadChat()">Refresh Chat</button>
+        <div id="chat-list"></div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Moderation Log</div>
+        <button class="btn-refresh" onclick="loadModLog()">Refresh Log</button>
+        <div id="modlog-list"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        // Load all data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadReports();
+            loadChat();
+            loadModLog();
+        });
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/stats`);
+                const stats = await response.json();
+
+                document.getElementById('stat-reports').textContent = stats.reports_count;
+                document.getElementById('stat-chat').textContent = stats.chat_count;
+                document.getElementById('stat-confirmations').textContent = stats.confirmations_count;
+                document.getElementById('stat-modlog').textContent = stats.modlog_count;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        async function loadReports() {
+            const container = document.getElementById('reports-list');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/reports`);
+                const reports = await response.json();
+
+                if (reports.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No reports found</div>';
+                    return;
+                }
+
+                container.innerHTML = reports.map(r => `
+                    <div class="item">
+                        <div class="item-details">
+                            <div class="item-id">Report #${r.id} - ${r.type}</div>
+                            <div class="item-content"><strong>${r.reporter_name}</strong>: ${r.description || 'No description'}</div>
+                            <div class="item-meta">
+                                ${new Date(r.sighting_time).toLocaleString()} |
+                                Lat: ${r.lat.toFixed(4)}, Lon: ${r.lon.toFixed(4)} |
+                                ${r.confirmations || 0} confirmations
+                                ${r.photo_path ? ' | Has photo' : ''}
+                            </div>
+                        </div>
+                        <button class="btn-delete" onclick="deleteReport(${r.id})">Delete</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load reports:', error);
+                container.innerHTML = '<div class="empty-state">Error loading reports</div>';
+            }
+        }
+
+        async function deleteReport(id) {
+            if (!confirm(`Delete report #${id}? This will also delete its photo and confirmations.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/reports/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadStats();
+                    loadReports();
+                    loadModLog();
+                } else {
+                    alert('Failed to delete report');
+                }
+            } catch (error) {
+                console.error('Failed to delete report:', error);
+                alert('Error deleting report');
+            }
+        }
+
+        async function loadChat() {
+            const container = document.getElementById('chat-list');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/chat`);
+                const messages = await response.json();
+
+                if (messages.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No chat messages found</div>';
+                    return;
+                }
+
+                container.innerHTML = messages.map(m => `
+                    <div class="item">
+                        <div class="item-details">
+                            <div class="item-id">Message #${m.id}</div>
+                            <div class="item-content"><strong>${m.name}</strong>: ${m.message}</div>
+                            <div class="item-meta">${new Date(m.timestamp).toLocaleString()} | IP: ${m.ip || 'N/A'}</div>
+                        </div>
+                        <button class="btn-delete" onclick="deleteChat(${m.id})">Delete</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load chat:', error);
+                container.innerHTML = '<div class="empty-state">Error loading chat</div>';
+            }
+        }
+
+        async function deleteChat(id) {
+            if (!confirm(`Delete chat message #${id}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/chat/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadStats();
+                    loadChat();
+                    loadModLog();
+                } else {
+                    alert('Failed to delete message');
+                }
+            } catch (error) {
+                console.error('Failed to delete message:', error);
+                alert('Error deleting message');
+            }
+        }
+
+        async function loadModLog() {
+            const container = document.getElementById('modlog-list');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/modlog`);
+                const entries = await response.json();
+
+                if (entries.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No moderation actions logged yet</div>';
+                    return;
+                }
+
+                container.innerHTML = entries.map(e => `
+                    <div class="log-entry">
+                        <div class="log-time">${new Date(e.timestamp).toLocaleString()}</div>
+                        <div class="log-action">${e.action.toUpperCase()} ${e.target_type} #${e.target_id}</div>
+                        <div class="log-details">${formatLogDetails(e)}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load modlog:', error);
+                container.innerHTML = '<div class="empty-state">Error loading log</div>';
+            }
+        }
+
+        function formatLogDetails(entry) {
+            if (!entry.details) return '';
+
+            const parts = [];
+            if (entry.details.reporter_name) parts.push(`Reporter: ${entry.details.reporter_name}`);
+            if (entry.details.sender_name) parts.push(`Sender: ${entry.details.sender_name}`);
+            if (entry.details.type) parts.push(`Type: ${entry.details.type}`);
+            if (entry.details.message_preview) parts.push(`Message: "${entry.details.message_preview}"`);
+            if (entry.details.had_photo) parts.push('Photo deleted');
+
+            return parts.join(' | ');
+        }
+    </script>
+</body>
+</html>

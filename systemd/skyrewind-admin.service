@@ -1,0 +1,18 @@
+[Unit]
+Description=SkyRewind Admin Backend (Moderation)
+After=network.target
+
+[Service]
+Type=simple
+User=matt
+Group=skyrewind
+WorkingDirectory=/opt/skyrewind-merged
+Environment="PATH=/opt/skyrewind-merged/venv/bin"
+ExecStart=/opt/skyrewind-merged/venv/bin/gunicorn -w 2 -b 0.0.0.0:5004 backend.admin_app:app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
