@@ -1499,11 +1499,91 @@ body {
 }
 
 /* Mobile breakpoint: < 768px */
+/* ===== MOBILE BOTTOM NAVIGATION ===== */
+.mobile-bottom-nav {
+    display: none; /* Hidden by default, shown on mobile */
+}
+
+/* Desktop: ignore mobile page attributes */
+@media screen and (min-width: 768px) {
+    .main-grid > *,
+    .main-grid .left-column,
+    .main-grid .center-column,
+    .panel-photos {
+        display: flex !important;
+    }
+
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    body {
+        padding-bottom: 0 !important;
+    }
+}
+
+/* Mobile bottom nav styling (shown only on mobile) */
+@media screen and (max-width: 767px) {
+    .mobile-bottom-nav {
+        display: flex;
+        background: var(--panel-bg);
+        border-top: 2px solid var(--panel-border);
+        padding: 8px 0 4px 0;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        justify-content: space-around;
+        align-items: stretch;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .mobile-nav-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        padding: 4px 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        gap: 2px;
+        min-height: 48px;
+    }
+
+    .mobile-nav-btn .nav-icon {
+        font-size: 20px;
+        line-height: 1;
+    }
+
+    .mobile-nav-btn .nav-label {
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
+    }
+
+    .mobile-nav-btn:active {
+        background: var(--input-bg);
+    }
+
+    .mobile-nav-btn.active {
+        color: var(--accent);
+        background: var(--input-bg);
+        border-top: 2px solid var(--accent);
+    }
+}
+
+
 @media screen and (max-width: 767px) {
     body {
         overflow: auto;
         height: auto;
         font-size: 14px;
+        padding-bottom: 64px; /* Space for bottom nav */
     }
 
     #root {
@@ -1511,8 +1591,42 @@ body {
         flex-direction: column;
         height: auto;
         min-height: 100vh;
-        padding: 3px;
+        padding: 3px 3px 68px 3px; /* Extra bottom padding for nav */
         gap: 3px;
+    }
+
+    /* Show mobile bottom navigation */
+    .mobile-bottom-nav {
+        display: flex;
+    }
+
+    /* Mobile page switching - hide all by default on mobile */
+    .main-grid > *,
+    .panel-photos {
+        display: none;
+    }
+
+    /* Show only elements matching current page */
+    .main-grid[data-mobile-page="map"] [data-mobile-pages*="map"],
+    .main-grid[data-mobile-page="map"] .center-column,
+    .main-grid[data-mobile-page="reports"] [data-mobile-pages*="reports"],
+    .main-grid[data-mobile-page="reports"] .left-column,
+    .main-grid[data-mobile-page="reports"] .center-column,
+    .main-grid[data-mobile-page="flights"] [data-mobile-pages*="flights"],
+    .main-grid[data-mobile-page="flights"] .left-column,
+    .main-grid[data-mobile-page="chat"] [data-mobile-pages*="chat"],
+    [data-mobile-page="photos"] .panel-photos[data-mobile-pages*="photos"] {
+        display: flex;
+    }
+
+    /* Panels should be flex column */
+    .main-grid[data-mobile-page="map"] .panel,
+    .main-grid[data-mobile-page="reports"] .panel,
+    .main-grid[data-mobile-page="flights"] .panel,
+    .main-grid[data-mobile-page="chat"] .panel,
+    [data-mobile-page="photos"] .panel-photos {
+        display: flex;
+        flex-direction: column;
     }
 
     /* Show hamburger menu and help button on mobile */
@@ -1524,35 +1638,43 @@ body {
         display: block;
     }
 
-    /* Header - compact on mobile */
+    /* Header - FIX BUG #2: stack on mobile to prevent overlap */
     .header {
-        flex-direction: row;
+        flex-direction: column;
         gap: 8px;
         padding: 10px;
-        align-items: center;
+        align-items: stretch;
     }
 
     .header-left {
-        flex: 1;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         min-width: 0;
+        width: 100%;
     }
 
     .header-title {
         font-size: 11px;
         flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .header-status {
+        display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        font-size: 11px;
+        gap: 6px;
+        font-size: 10px;
+        width: 100%;
+        justify-content: space-between;
     }
 
     .status-indicator {
-        font-size: 11px;
+        font-size: 10px;
+        flex-shrink: 0;
     }
 
     /* Theme switcher - show in mobile menu instead */
@@ -1560,23 +1682,48 @@ body {
         display: none;
     }
 
-    /* Main grid - stack vertically on mobile */
+    /* Main grid - full height pages on mobile */
     .main-grid {
         display: flex;
         flex-direction: column;
         gap: 3px;
         overflow: visible;
+        min-height: calc(100vh - 140px); /* Header + bottom nav space */
     }
 
-    /* Map panel - give it a fixed height on mobile */
-    .panel-map {
-        height: 420px !important;
-        min-height: 420px;
-        order: 1;
+    /* Map panel - full viewport on mobile map page */
+    .main-grid[data-mobile-page="map"] .panel-map {
+        height: calc(100vh - 140px) !important;
+        min-height: calc(100vh - 140px);
+        flex: 1;
     }
 
     #map {
         height: 100% !important;
+    }
+
+    /* Reports page - allow scrolling */
+    .main-grid[data-mobile-page="reports"] .left-column,
+    .main-grid[data-mobile-page="reports"] .center-column {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    /* Flights page - full height */
+    .main-grid[data-mobile-page="flights"] .panel {
+        min-height: calc(100vh - 140px);
+    }
+
+    /* Chat page - full height */
+    .main-grid[data-mobile-page="chat"] .panel-chat {
+        height: calc(100vh - 140px) !important;
+        min-height: calc(100vh - 140px);
+    }
+
+    /* Photos page - scrollable */
+    [data-mobile-page="photos"] .panel-photos {
+        min-height: calc(100vh - 140px);
     }
 
     /* Mode indicator - adjust for mobile */
@@ -1613,50 +1760,74 @@ body {
         min-width: auto;
     }
 
-    /* Detail panel */
+    /* Panel sizing for different pages */
     .panel-detail {
         height: auto !important;
-        min-height: 140px;
-        order: 2;
+        min-height: 200px;
+        flex: 1;
     }
 
-    /* Left column panels */
     .left-column {
-        order: 3;
         gap: 3px;
     }
 
-    /* Sighting types - make more compact */
     .panel:has(#sighting-types) {
-        max-height: 220px;
+        flex-shrink: 0;
     }
 
-    /* Flights panel - compact */
     .panel:has(#flights-panel) {
-        max-height: 160px;
+        flex: 1;
     }
 
-    /* Reports list */
     .panel:has(#reports-list) {
-        max-height: 320px;
+        flex: 1;
+        min-height: 300px;
     }
 
-    /* Right column - chat */
     .panel-chat {
-        order: 4;
-        height: 320px;
-        min-height: 320px;
+        flex: 1;
+        min-height: 0;
     }
 
     .chat-messages {
         flex: 1;
         overflow-y: auto;
+        min-height: 0;
     }
 
-    /* Photo strip */
-    .panel-photos {
-        order: 5;
-        height: 140px !important;
+    /* FIX BUG #4: Ensure chat message names and text don't clip on mobile */
+    .chat-message {
+        padding: 12px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .chat-message-name {
+        font-size: 13px;
+        margin-bottom: 6px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .chat-message-text {
+        font-size: 13px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .chat-message-time {
+        font-size: 11px;
+        margin-top: 6px;
+    }
+
+    /* Photo strip - full page on photos page */
+    [data-mobile-page="photos"] .panel-photos {
+        height: auto !important;
+        flex: 1;
+    }
+
+    [data-mobile-page="photos"] .photo-strip {
+        min-height: calc(100vh - 200px);
     }
 
     /* Touch targets - minimum 44px */

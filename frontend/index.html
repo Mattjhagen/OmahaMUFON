@@ -86,17 +86,17 @@
         </div>
 
         <!-- Main Grid -->
-        <div class="main-grid">
+        <div class="main-grid" data-mobile-page="map">
             <!-- LEFT COLUMN -->
-            <div class="left-column">
+            <div class="left-column" data-mobile-pages="reports flights">
                 <!-- SIGHTING TYPES Panel -->
-                <div class="panel">
+                <div class="panel" data-mobile-pages="reports">
                     <div class="panel-title">SIGHTING TYPES</div>
                     <div class="panel-content" id="sighting-types"></div>
                 </div>
 
                 <!-- FLIGHTS Panel -->
-                <div class="panel">
+                <div class="panel" data-mobile-pages="flights">
                     <div class="panel-title">FLIGHTS</div>
                     <div class="panel-content" id="flights-panel">
                         <div class="stat-large" id="flights-count">0</div>
@@ -105,16 +105,16 @@
                 </div>
 
                 <!-- UAP REPORTS List -->
-                <div class="panel panel-flex">
+                <div class="panel panel-flex" data-mobile-pages="reports">
                     <div class="panel-title">UAP REPORTS (<span id="reports-count-panel">0</span>)</div>
                     <div class="panel-content" id="reports-list"></div>
                 </div>
             </div>
 
             <!-- CENTER COLUMN - Map + Detail -->
-            <div class="center-column">
+            <div class="center-column" data-mobile-pages="map reports">
                 <!-- Map -->
-                <div class="panel panel-map">
+                <div class="panel panel-map" data-mobile-pages="map">
                     <div id="map"></div>
                     <!-- Mode Indicator -->
                     <div class="mode-indicator" id="mode-indicator">
@@ -154,7 +154,7 @@
                 </div>
 
                 <!-- ACTIVE SIGHTING Detail Panel -->
-                <div class="panel panel-detail">
+                <div class="panel panel-detail" data-mobile-pages="reports">
                     <div class="panel-title">
                         ACTIVE SIGHTING
                         <span class="panel-nav">
@@ -169,7 +169,7 @@
             </div>
 
             <!-- RIGHT COLUMN - GROUP CHAT -->
-            <div class="panel panel-chat">
+            <div class="panel panel-chat" data-mobile-pages="chat">
                 <div class="panel-title">
                     GROUP CHAT
                     <button id="notification-toggle-btn" class="btn-notification" title="Enable chat notifications" style="float: right; font-size: 7px; padding: 2px 6px;">🔔 OFF</button>
@@ -184,7 +184,7 @@
         </div>
 
         <!-- BOTTOM STRIP - USER SUBMITTED PHOTOS -->
-        <div class="panel panel-photos">
+        <div class="panel panel-photos" data-mobile-pages="photos">
             <div class="panel-title">USER SUBMITTED PHOTOS</div>
             <div class="photo-strip" id="photo-strip">
                 <div class="empty-state-photos">No photos submitted yet</div>
@@ -292,18 +292,47 @@
     <div class="mobile-menu-overlay" id="mobile-menu-overlay"></div>
     <div class="mobile-menu" id="mobile-menu">
         <div class="mobile-menu-header">
-            <span>MENU</span>
+            <span>NAVIGATION</span>
             <button class="mobile-menu-close" id="mobile-menu-close">×</button>
         </div>
         <div class="mobile-menu-content">
+            <button class="mobile-menu-item" id="mobile-nav-map">🗺️ Map</button>
+            <button class="mobile-menu-item" id="mobile-nav-reports">📋 Reports</button>
+            <button class="mobile-menu-item" id="mobile-nav-flights">✈️ Flights</button>
+            <button class="mobile-menu-item" id="mobile-nav-chat">💬 Chat</button>
+            <button class="mobile-menu-item" id="mobile-nav-photos">📷 Photos</button>
             <button class="mobile-menu-item" id="mobile-menu-report">📝 Report Sighting</button>
-            <button class="mobile-menu-item" id="mobile-menu-chat">💬 Chat</button>
+            <hr style="margin: 12px 0; border: 0; border-top: 1px solid var(--panel-border);">
             <button class="mobile-menu-item" id="mobile-menu-notifications">🔔 Notifications</button>
             <button class="mobile-menu-item" id="mobile-menu-theme">🎨 Change Theme</button>
-            <button class="mobile-menu-item" id="mobile-menu-tutorial">❓ Show Tutorial</button>
+            <button class="mobile-menu-item" id="mobile-menu-tutorial">❓ Tutorial</button>
             <button class="mobile-menu-item" id="mobile-menu-install">⬇️ Install App</button>
         </div>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="mobile-nav-btn active" data-page="map">
+            <span class="nav-icon">🗺️</span>
+            <span class="nav-label">Map</span>
+        </button>
+        <button class="mobile-nav-btn" data-page="reports">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Reports</span>
+        </button>
+        <button class="mobile-nav-btn" data-page="flights">
+            <span class="nav-icon">✈️</span>
+            <span class="nav-label">Flights</span>
+        </button>
+        <button class="mobile-nav-btn" data-page="chat">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">Chat</span>
+        </button>
+        <button class="mobile-nav-btn" data-page="photos">
+            <span class="nav-icon">📷</span>
+            <span class="nav-label">Photos</span>
+        </button>
+    </nav>
 
     <!-- Tutorial Overlay -->
     <div class="tutorial-overlay" id="tutorial-overlay">

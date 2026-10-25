@@ -75,6 +75,31 @@ document.addEventListener('DOMContentLoaded', () => {
     startLiveUpdates();
     updateClock();
     setInterval(updateClock, 1000);
+
+    // FIX BUG #1: Ensure map renders correctly on mobile after layout settles
+    setTimeout(() => {
+        if (map) {
+            map.invalidateSize();
+            console.log('[MAP] Initial invalidateSize() called');
+        }
+    }, 100);
+
+    // FIX BUG #1: Handle window resize and orientation change
+    window.addEventListener('resize', () => {
+        if (map) {
+            map.invalidateSize();
+            console.log('[MAP] Resize invalidateSize() called');
+        }
+    });
+
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+                console.log('[MAP] Orientation invalidateSize() called');
+            }
+        }, 200);
+    });
 });
 
 // ===== THEME SYSTEM =====
@@ -612,24 +637,29 @@ async function loadRewindData(time, lat, lon, radius) {
                 rewindMarkers[a.icao_hex] = marker;
             });
 
-            // Update flights count with UNIQUE aircraft count
+            // Update flights count with UNIQUE aircraft count using unified function
             const finalMarkerCount = Object.keys(rewindMarkers).length;
             console.log(`[REWIND] Rendered ${finalMarkerCount} markers on map`);
 
-            document.getElementById('flights-count').textContent = finalMarkerCount;
-            document.getElementById('aircraft-count').textContent = finalMarkerCount;
+            updateAircraftCount(finalMarkerCount);
         } else {
             // No recorded aircraft for this time - honest empty state
-            document.getElementById('flights-count').textContent = '0';
-            document.getElementById('aircraft-count').textContent = '0';
+            updateAircraftCount(0);
         }
 
     } catch (error) {
         console.error('Error loading rewind data:', error);
         // Don't alert for network errors, just log them
-        document.getElementById('flights-count').textContent = '0';
-        document.getElementById('aircraft-count').textContent = '0';
+        updateAircraftCount(0);
     }
+}
+
+// FIX BUG #3: Unified aircraft count update function (single source of truth)
+function updateAircraftCount(count) {
+    const countStr = count.toString();
+    document.getElementById('aircraft-count').textContent = countStr;
+    document.getElementById('flights-count').textContent = countStr;
+    console.log(`[COUNT] Updated both counters to ${countStr}`);
 }
 
 // ===== LIVE AIRCRAFT (Feature 1: Differentiated Markers) =====
@@ -650,9 +680,8 @@ async function loadAircraft() {
 
         const aircraft = await response.json();
 
-        // Update status
-        document.getElementById('aircraft-count').textContent = aircraft.length;
-        document.getElementById('flights-count').textContent = aircraft.length;
+        // Update status using unified function
+        updateAircraftCount(aircraft.length);
 
         const statusDot = document.getElementById('status-dot');
         if (aircraft.length > 0) {
@@ -1509,12 +1538,15 @@ document.getElementById('lightbox').onclick = (e) => {
 
 // ===== MOBILE MENU =====
 let mobileMenuOpen = false;
+let currentMobilePage = 'map';
 
 function initMobileMenu() {
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
     const mobileMenuClose = document.getElementById('mobile-menu-close');
+    const mainGrid = document.querySelector('.main-grid');
+    const bottomNav = document.getElementById('mobile-bottom-nav');
 
     if (!hamburgerBtn) return;
 
@@ -1523,38 +1555,119 @@ function initMobileMenu() {
         hamburgerBtn.classList.toggle('active');
         mobileMenu.classList.toggle('active');
         mobileMenuOverlay.classList.toggle('active');
+
+        // FIX BUG #1: Invalidate map size when menu closes (layout may have shifted)
+        if (!mobileMenuOpen && map) {
+            setTimeout(() => {
+                map.invalidateSize();
+                console.log('[MAP] Menu close invalidateSize() called');
+            }, 300);
+        }
     };
 
+    // Mobile page navigation function
+    window.switchMobilePage = (pageName) => {
+        currentMobilePage = pageName;
+
+        // Update body and main grid data attributes
+        document.body.setAttribute('data-mobile-page', pageName);
+        mainGrid.setAttribute('data-mobile-page', pageName);
+
+        // Update bottom nav active state
+        document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.page === pageName);
+        });
+
+        // Invalidate map size when switching to map page
+        if (pageName === 'map' && map) {
+            setTimeout(() => {
+                map.invalidateSize();
+                console.log('[MOBILE NAV] Map page invalidateSize() called');
+            }, 100);
+        }
+
+        // Auto-focus chat input when switching to chat page
+        if (pageName === 'chat') {
+            setTimeout(() => {
+                document.getElementById('chat-message')?.focus();
+            }, 300);
+        }
+
+        // Scroll to top of page
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        console.log(`[MOBILE NAV] Switched to page: ${pageName}`);
+    };
+
+    // Bottom navigation handlers
+    if (bottomNav) {
+        bottomNav.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const page = btn.dataset.page;
+                switchMobilePage(page);
+            });
+        });
+    }
+
+    // Hamburger menu handlers
     hamburgerBtn.onclick = toggleMenu;
     mobileMenuClose.onclick = toggleMenu;
     mobileMenuOverlay.onclick = toggleMenu;
 
-    // Menu item actions
-    document.getElementById('mobile-menu-report').onclick = () => {
+    // Navigation menu items
+    document.getElementById('mobile-nav-map')?.addEventListener('click', () => {
+        toggleMenu();
+        switchMobilePage('map');
+    });
+
+    document.getElementById('mobile-nav-reports')?.addEventListener('click', () => {
+        toggleMenu();
+        switchMobilePage('reports');
+    });
+
+    document.getElementById('mobile-nav-flights')?.addEventListener('click', () => {
+        toggleMenu();
+        switchMobilePage('flights');
+    });
+
+    document.getElementById('mobile-nav-chat')?.addEventListener('click', () => {
+        toggleMenu();
+        switchMobilePage('chat');
+    });
+
+    document.getElementById('mobile-nav-photos')?.addEventListener('click', () => {
+        toggleMenu();
+        switchMobilePage('photos');
+    });
+
+    // Action menu items
+    document.getElementById('mobile-menu-report')?.addEventListener('click', () => {
         toggleMenu();
         document.getElementById('report-btn').click();
-    };
+    });
 
-    document.getElementById('mobile-menu-chat').onclick = () => {
-        toggleMenu();
-        document.getElementById('chat-message')?.focus();
-        document.getElementById('chat-message')?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    document.getElementById('mobile-menu-notifications').onclick = () => {
+    document.getElementById('mobile-menu-notifications')?.addEventListener('click', () => {
         toggleMenu();
         toggleNotifications();
-    };
+    });
 
-    document.getElementById('mobile-menu-tutorial').onclick = () => {
+    document.getElementById('mobile-menu-tutorial')?.addEventListener('click', () => {
         toggleMenu();
         showTutorial();
-    };
+    });
 
-    document.getElementById('mobile-menu-install').onclick = () => {
+    document.getElementById('mobile-menu-install')?.addEventListener('click', () => {
         toggleMenu();
         promptInstall();
-    };
+    });
+
+    document.getElementById('mobile-menu-theme')?.addEventListener('click', () => {
+        toggleMenu();
+        showMobileThemeModal();
+    });
+
+    // Initialize to map page
+    switchMobilePage('map');
 }
 
 // ===== MY LOCATION (GEOLOCATION) =====
