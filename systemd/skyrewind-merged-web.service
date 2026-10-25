@@ -1,0 +1,18 @@
+[Unit]
+Description=SkyRewind Merged Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=skyrewind
+Group=skyrewind
+WorkingDirectory=/opt/skyrewind-merged
+Environment="FLASK_DEBUG=false"
+ExecStart=/opt/skyrewind-merged/venv/bin/gunicorn -w 4 -b 0.0.0.0:5003 backend.app:app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

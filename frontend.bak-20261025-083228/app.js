@@ -1,0 +1,706 @@
+// API base URL
+const API_BASE = window.location.origin;
+
+// Map center for Omaha, NE
+const DEFAULT_CENTER = [41.25, -95.95];
+const DEFAULT_ZOOM = 9;
+
+// Tile layers for light and dark themes
+const TILE_LAYERS = {
+    light: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    },
+    dark: {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, © OpenStreetMap contributors, and the GIS User Community',
+        maxZoom: 16
+    }
+};
+
+// State
+let map = null;
+let reportMap = null;
+let currentTileLayer = null;
+let currentReportTileLayer = null;
+let markers = {};
+let liveInterval = null;
+let currentSighting = null;
+let sightingMarker = null;
+let sightingLine = null;
+let reportMarker = null;
+let rewindPositions = [];
+let currentTheme = 'dark';
+let allSightings = [];
+let currentFilter = 'all';
+let currentSearchTerm = '';
+
+// Initialize app
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initNavigation();
+    initMap();
+    initModals();
+    initSearchFilter();
+    startLiveUpdates();
+    loadFeed();
+});
+
+// Theme Management
+function initTheme() {
+    const saved = localStorage.getItem('skyrewind-theme');
+    currentTheme = saved || 'dark';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+}
+
+function toggleTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('skyrewind-theme', currentTheme);
+
+    updateMapTiles();
+}
+
+function getTileLayerForTheme(theme) {
+    const config = TILE_LAYERS[theme];
+    return L.tileLayer(config.url, {
+        attribution: config.attribution,
+        maxZoom: config.maxZoom
+    });
+}
+
+function updateMapTiles() {
+    if (map && currentTileLayer) {
+        map.removeLayer(currentTileLayer);
+        currentTileLayer = getTileLayerForTheme(currentTheme);
+        currentTileLayer.addTo(map);
+    }
+
+    if (reportMap && currentReportTileLayer) {
+        reportMap.removeLayer(currentReportTileLayer);
+        currentReportTileLayer = getTileLayerForTheme(currentTheme);
+        currentReportTileLayer.addTo(reportMap);
+    }
+}
+
+// Navigation
+function initNavigation() {
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            switchView(view);
+        });
+    });
+
+    document.getElementById('report-btn').addEventListener('click', openReportModal);
+    document.getElementById('info-btn').addEventListener('click', () => {
+        document.getElementById('info-modal').classList.add('active');
+        document.getElementById('modal-overlay').classList.add('active');
+    });
+    document.getElementById('info-close-btn').addEventListener('click', () => {
+        document.getElementById('info-modal').classList.remove('active');
+        document.getElementById('modal-overlay').classList.remove('active');
+    });
+}
+
+function switchView(viewName) {
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === viewName);
+    });
+
+    document.querySelectorAll('.view-content').forEach(view => {
+        view.classList.remove('active');
+    });
+    document.getElementById(`${viewName}-view`).classList.add('active');
+
+    if (viewName === 'map') {
+        setTimeout(() => map && map.invalidateSize(), 100);
+        if (!currentSighting) {
+            startLiveUpdates();
+        }
+    } else if (viewName === 'feed') {
+        stopLiveUpdates();
+        loadFeed();
+    }
+}
+
+// Map Initialization
+function initMap() {
+    map = L.map('map-container', { scrollWheelZoom: false }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    currentTileLayer = getTileLayerForTheme(currentTheme);
+    currentTileLayer.addTo(map);
+
+    map.on('click', () => map.scrollWheelZoom.enable());
+    map.on('mouseout', () => map.scrollWheelZoom.disable());
+
+    setTimeout(() => map.invalidateSize(), 100);
+    window.addEventListener('resize', () => map.invalidateSize());
+
+    document.getElementById('load-sighting-btn').addEventListener('click', loadSelectedSighting);
+
+    document.getElementById('time-slider').addEventListener('input', (e) => {
+        const offset = parseFloat(e.target.value);
+        document.getElementById('time-offset').textContent =
+            offset >= 0 ? `+${offset} min` : `${offset} min`;
+        updateRewindMap(offset);
+    });
+
+    document.getElementById('search-radius').addEventListener('change', () => {
+        if (currentSighting) {
+            loadPositionsForSighting();
+        }
+    });
+
+    loadSightingsDropdown();
+}
+
+// Live Updates
+function startLiveUpdates() {
+    updateLivePositions();
+    if (liveInterval) clearInterval(liveInterval);
+    liveInterval = setInterval(updateLivePositions, 10000);
+}
+
+function stopLiveUpdates() {
+    if (liveInterval) {
+        clearInterval(liveInterval);
+        liveInterval = null;
+    }
+}
+
+function createAircraftIcon(rotation = 0, sources = []) {
+    const color = '#6ea87d';
+    return L.divIcon({
+        html: `<svg width="24" height="24" viewBox="0 0 16 16"><g transform="rotate(${rotation} 8 8)"><path d="M 8 2 L 10 12 L 8 11 L 6 12 Z" fill="${color}" stroke="#000" stroke-width="0.5"/></g></svg>`,
+        className: '',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+function getSourceBadge(sources) {
+    if (!sources || sources.length === 0) return '';
+    if (sources.length === 2) {
+        return '<span style="font-size: 8px; color: #10b981; font-weight: bold;">[ADS-B + API]</span>';
+    }
+    if (sources.includes('adsb')) {
+        return '<span style="font-size: 8px; color: #3B82F6; font-weight: bold;">[ADS-B]</span>';
+    }
+    if (sources.includes('api')) {
+        return '<span style="font-size: 8px; color: #F59E0B; font-weight: bold;">[API]</span>';
+    }
+    return '';
+}
+
+async function updateLivePositions() {
+    try {
+        const response = await fetch(`${API_BASE}/api/aircraft/live`);
+        const aircraft = await response.json();
+
+        const count = aircraft.length;
+        const lastUpdate = new Date().toLocaleTimeString();
+
+        document.getElementById('status-dot').classList.add('online');
+
+        const receiverStatus = document.getElementById('receiver-status');
+        if (receiverStatus) {
+            receiverStatus.textContent = 'LIVE';
+            receiverStatus.classList.add('online');
+        }
+        const receiverAircraft = document.getElementById('receiver-aircraft');
+        if (receiverAircraft) receiverAircraft.textContent = count;
+        const receiverLastUpdate = document.getElementById('receiver-last-update');
+        if (receiverLastUpdate) receiverLastUpdate.textContent = lastUpdate;
+
+        const statAircraft = document.getElementById('stat-aircraft');
+        if (statAircraft) statAircraft.textContent = count;
+        const statUpdated = document.getElementById('stat-updated');
+        if (statUpdated) statUpdated.textContent = lastUpdate;
+
+        // Clear old markers
+        Object.values(markers).forEach(marker => marker.remove());
+        markers = {};
+
+        // Add new markers with source badges
+        aircraft.forEach(ac => {
+            const icon = createAircraftIcon(ac.track || 0, ac.sources);
+
+            const callsign = ac.callsign || ac.hex;
+            const speed = ac.ground_speed ? Math.round(ac.ground_speed) : 'N/A';
+            const sourceBadge = getSourceBadge(ac.sources);
+
+            const marker = L.marker([ac.lat, ac.lon], { icon })
+                .bindPopup(`
+                    <strong>${callsign}</strong> ${sourceBadge}<br>
+                    Altitude: ${ac.altitude || 'N/A'} ft<br>
+                    Speed: ${speed} kts<br>
+                    Heading: ${ac.track || 'N/A'}°<br>
+                    ICAO: ${ac.hex}
+                `)
+                .addTo(map);
+
+            markers[ac.hex] = marker;
+        });
+
+        document.getElementById('live-count').textContent = `${count} aircraft tracked`;
+        document.getElementById('live-last-update').textContent = `Last update: ${lastUpdate}`;
+
+    } catch (error) {
+        console.error('Error updating live positions:', error);
+        document.getElementById('status-dot').classList.remove('online');
+        const receiverStatus = document.getElementById('receiver-status');
+        if (receiverStatus) {
+            receiverStatus.textContent = 'OFFLINE';
+            receiverStatus.classList.remove('online');
+        }
+    }
+}
+
+// Sighting Load & Rewind
+async function loadSightingsDropdown() {
+    try {
+        const response = await fetch(`${API_BASE}/api/sightings`);
+        const sightings = await response.json();
+
+        const select = document.getElementById('sighting-select');
+        select.innerHTML = '<option value="">Select sighting...</option>';
+
+        sightings.forEach(sighting => {
+            const date = new Date(sighting.sighting_time).toLocaleString();
+            const option = document.createElement('option');
+            option.value = sighting.id;
+            option.textContent = `${date} - ${sighting.reporter_name}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading sightings:', error);
+    }
+}
+
+async function loadSelectedSighting() {
+    const sightingId = document.getElementById('sighting-select').value;
+    if (!sightingId) return;
+
+    stopLiveUpdates();
+
+    try {
+        const response = await fetch(`${API_BASE}/api/sightings/${sightingId}`);
+        currentSighting = await response.json();
+
+        document.getElementById('live-status-strip').style.display = 'none';
+        document.getElementById('match-panel').style.display = 'block';
+
+        map.setView([currentSighting.lat, currentSighting.lon], 11);
+
+        Object.values(markers).forEach(marker => marker.remove());
+        markers = {};
+
+        if (sightingMarker) sightingMarker.remove();
+        if (sightingLine) sightingLine.remove();
+
+        sightingMarker = L.marker([currentSighting.lat, currentSighting.lon], {
+            icon: L.divIcon({
+                className: 'sighting-icon',
+                html: '<div></div>',
+                iconSize: [16, 16]
+            })
+        }).bindPopup(`
+            <strong>Sighting</strong><br>
+            ${currentSighting.reporter_name}<br>
+            ${new Date(currentSighting.sighting_time).toLocaleString()}<br>
+            ${currentSighting.description}
+        `).addTo(map);
+
+        if (currentSighting.bearing !== null) {
+            const bearingRad = currentSighting.bearing * Math.PI / 180;
+            const distance = 0.5;
+            const endLat = currentSighting.lat + distance * Math.cos(bearingRad);
+            const endLon = currentSighting.lon + distance * Math.sin(bearingRad) / Math.cos(currentSighting.lat * Math.PI / 180);
+
+            sightingLine = L.polyline([
+                [currentSighting.lat, currentSighting.lon],
+                [endLat, endLon]
+            ], {
+                color: '#ef4444',
+                weight: 2,
+                dashArray: '5, 10'
+            }).addTo(map);
+        }
+
+        document.getElementById('time-slider').value = 0;
+        document.getElementById('time-offset').textContent = '±0 min';
+
+        await loadPositionsForSighting();
+        await findMatches();
+
+    } catch (error) {
+        console.error('Error loading sighting:', error);
+        showNotification('Error loading sighting', 'error');
+    }
+}
+
+async function loadPositionsForSighting() {
+    if (!currentSighting) return;
+
+    const radius = document.getElementById('search-radius').value;
+
+    try {
+        const params = new URLSearchParams({
+            time: currentSighting.sighting_time,
+            lat: currentSighting.lat,
+            lon: currentSighting.lon,
+            radius: radius
+        });
+
+        const response = await fetch(`${API_BASE}/api/rewind?${params}`);
+        rewindPositions = await response.json();
+
+        updateRewindMap(0);
+    } catch (error) {
+        console.error('Error loading positions:', error);
+    }
+}
+
+function updateRewindMap(offsetMinutes) {
+    if (!currentSighting) return;
+
+    Object.values(markers).forEach(marker => marker.remove());
+    markers = {};
+
+    const targetTime = new Date(new Date(currentSighting.sighting_time).getTime() + offsetMinutes * 60000);
+
+    const timeWindow = 30000;
+    const relevantPositions = rewindPositions.filter(pos => {
+        const posTime = new Date(pos.timestamp);
+        return Math.abs(posTime - targetTime) <= timeWindow;
+    });
+
+    const latestByAircraft = {};
+    relevantPositions.forEach(pos => {
+        if (!latestByAircraft[pos.icao_hex] ||
+            new Date(pos.timestamp) > new Date(latestByAircraft[pos.icao_hex].timestamp)) {
+            latestByAircraft[pos.icao_hex] = pos;
+        }
+    });
+
+    Object.values(latestByAircraft).forEach(pos => {
+        const icon = createAircraftIcon(pos.track || 0, [pos.source]);
+        const sourceBadge = pos.source === 'adsb' ? '[ADS-B]' : '[API]';
+
+        const marker = L.marker([pos.lat, pos.lon], { icon })
+            .bindPopup(`
+                <strong>${pos.callsign || pos.icao_hex}</strong> ${sourceBadge}<br>
+                Altitude: ${pos.altitude || 'N/A'} ft<br>
+                Speed: ${pos.ground_speed || 'N/A'} kts<br>
+                Heading: ${pos.track || 'N/A'}°<br>
+                Distance: ${pos.distance_miles.toFixed(1)} mi<br>
+                Time: ${new Date(pos.timestamp).toLocaleTimeString()}
+            `)
+            .addTo(map);
+
+        markers[pos.icao_hex] = marker;
+    });
+}
+
+async function findMatches() {
+    if (!currentSighting) return;
+
+    const radius = document.getElementById('search-radius').value;
+
+    try {
+        const params = new URLSearchParams({
+            time: currentSighting.sighting_time,
+            lat: currentSighting.lat,
+            lon: currentSighting.lon,
+            radius: radius
+        });
+
+        const response = await fetch(`${API_BASE}/api/rewind?${params}`);
+        const observations = await response.json();
+
+        const candidatesByIcao = {};
+        observations.forEach(obs => {
+            if (!candidatesByIcao[obs.icao_hex]) {
+                candidatesByIcao[obs.icao_hex] = {
+                    icao_hex: obs.icao_hex,
+                    callsign: obs.callsign,
+                    closest_distance: obs.distance_miles,
+                    closest_time: obs.timestamp,
+                    altitude: obs.altitude,
+                    ground_speed: obs.ground_speed,
+                    track: obs.track,
+                    sources: [obs.source]
+                };
+            } else {
+                if (obs.distance_miles < candidatesByIcao[obs.icao_hex].closest_distance) {
+                    candidatesByIcao[obs.icao_hex].closest_distance = obs.distance_miles;
+                    candidatesByIcao[obs.icao_hex].closest_time = obs.timestamp;
+                }
+                if (!candidatesByIcao[obs.icao_hex].sources.includes(obs.source)) {
+                    candidatesByIcao[obs.icao_hex].sources.push(obs.source);
+                }
+            }
+        });
+
+        const matches = Object.values(candidatesByIcao).sort((a, b) => a.closest_distance - b.closest_distance);
+
+        const matchList = document.getElementById('match-list');
+        matchList.innerHTML = '';
+
+        if (matches.length === 0) {
+            matchList.innerHTML = `
+                <div class="no-match">
+                    <div class="no-match-title">No ADS-B match found</div>
+                    <div class="no-match-subtitle">No cooperative aircraft broadcasting ADS-B detected in the specified area and time window</div>
+                </div>
+            `;
+        } else {
+            matches.forEach(match => {
+                const sourceBadge = getSourceBadge(match.sources);
+                const div = document.createElement('div');
+                div.className = 'match-item';
+                div.innerHTML = `
+                    <div class="callsign">${match.callsign || match.icao_hex} ${sourceBadge}</div>
+                    <div class="details">
+                        <span><strong>ICAO</strong>${match.icao_hex}</span>
+                        <span><strong>Distance</strong>${match.closest_distance.toFixed(1)} mi</span>
+                        <span><strong>Altitude</strong>${match.altitude || 'N/A'} ft</span>
+                        <span><strong>Speed</strong>${match.ground_speed || 'N/A'} kts</span>
+                        <span><strong>Heading</strong>${match.track || 'N/A'}°</span>
+                        <span><strong>Closest at</strong>${new Date(match.closest_time).toLocaleTimeString()}</span>
+                    </div>
+                `;
+                matchList.appendChild(div);
+            });
+        }
+    } catch (error) {
+        console.error('Error finding matches:', error);
+    }
+}
+
+// Search and Filter
+function initSearchFilter() {
+    const searchInput = document.getElementById('sighting-search');
+    const filterPills = document.querySelectorAll('.filter-pill');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            currentSearchTerm = e.target.value.toLowerCase();
+            filterFeed();
+        });
+    }
+
+    filterPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            filterPills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            currentFilter = pill.dataset.filter;
+            filterFeed();
+        });
+    });
+}
+
+function filterFeed() {
+    const feedCards = document.querySelectorAll('.feed-card');
+
+    feedCards.forEach(card => {
+        const sightingId = card.dataset.sightingId;
+        const sighting = allSightings.find(s => s.id == sightingId);
+
+        if (!sighting) {
+            card.style.display = 'none';
+            return;
+        }
+
+        const searchText = `${sighting.reporter_name} ${sighting.description}`.toLowerCase();
+        const matchesSearch = currentSearchTerm === '' || searchText.includes(currentSearchTerm);
+
+        let matchesFilter = true;
+        if (currentFilter === 'live') {
+            const sightingTime = new Date(sighting.sighting_time);
+            const now = new Date();
+            const hoursSince = (now - sightingTime) / (1000 * 60 * 60);
+            matchesFilter = hoursSince <= 24;
+        } else if (currentFilter === 'rewind') {
+            const sightingTime = new Date(sighting.sighting_time);
+            const now = new Date();
+            const hoursSince = (now - sightingTime) / (1000 * 60 * 60);
+            matchesFilter = hoursSince > 24;
+        }
+
+        card.style.display = (matchesSearch && matchesFilter) ? 'block' : 'none';
+    });
+
+    const visibleCount = Array.from(feedCards).filter(c => c.style.display !== 'none').length;
+    const feedCount = document.getElementById('feed-count');
+    if (feedCount) {
+        feedCount.textContent = `${visibleCount} Sighting${visibleCount === 1 ? '' : 's'}`;
+    }
+}
+
+// Feed View
+async function loadFeed() {
+    try {
+        const response = await fetch(`${API_BASE}/api/sightings`);
+        const sightings = await response.json();
+        allSightings = sightings;
+
+        const feedList = document.getElementById('feed-list');
+        const feedCount = document.getElementById('feed-count');
+
+        if (sightings.length === 0) {
+            feedList.innerHTML = `
+                <div class="feed-empty">
+                    <div class="feed-empty-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                    </div>
+                    <p class="feed-empty-title">No sighting reports yet</p>
+                    <p class="feed-empty-subtitle">Submit the first report to begin tracking</p>
+                </div>
+            `;
+            feedCount.textContent = '0 Sightings';
+        } else {
+            feedList.innerHTML = '';
+            sightings.reverse().forEach(sighting => {
+                const card = document.createElement('div');
+                card.className = 'feed-card';
+                card.dataset.sightingId = sighting.id;
+                card.innerHTML = `
+                    <div class="feed-card-header">
+                        <div class="feed-card-name">${sighting.reporter_name}</div>
+                        <div class="feed-card-time">${new Date(sighting.sighting_time).toLocaleString()}</div>
+                    </div>
+                    <div class="feed-card-description">${sighting.description}</div>
+                    <div class="feed-card-location">${sighting.location_text || `${sighting.lat.toFixed(4)}, ${sighting.lon.toFixed(4)}`}</div>
+                `;
+                card.addEventListener('click', () => {
+                    document.getElementById('sighting-select').value = sighting.id;
+                    switchView('map');
+                    loadSelectedSighting();
+                });
+                feedList.appendChild(card);
+            });
+            feedCount.textContent = `${sightings.length} Sighting${sightings.length === 1 ? '' : 's'}`;
+        }
+
+        filterFeed();
+    } catch (error) {
+        console.error('Error loading feed:', error);
+    }
+}
+
+// Report Modal
+function initModals() {
+    const reportModal = document.getElementById('report-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const closeBtn = document.getElementById('modal-close-btn');
+    const form = document.getElementById('sighting-form');
+
+    closeBtn.addEventListener('click', closeReportModal);
+    modalOverlay.addEventListener('click', () => {
+        closeReportModal();
+        document.getElementById('info-modal').classList.remove('active');
+    });
+
+    form.addEventListener('submit', handleSightingSubmit);
+
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    form.sighting_time.value = now.toISOString().slice(0, 16);
+}
+
+function openReportModal() {
+    const reportModal = document.getElementById('report-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    reportModal.classList.add('active');
+    modalOverlay.classList.add('active');
+
+    if (!reportMap) {
+        setTimeout(() => {
+            reportMap = L.map('report-map-modal').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+            currentReportTileLayer = getTileLayerForTheme(currentTheme);
+            currentReportTileLayer.addTo(reportMap);
+
+            const form = document.getElementById('sighting-form');
+            form.lat.value = DEFAULT_CENTER[0];
+            form.lon.value = DEFAULT_CENTER[1];
+
+            reportMarker = L.marker(DEFAULT_CENTER, { draggable: true }).addTo(reportMap);
+
+            reportMarker.on('dragend', () => {
+                const pos = reportMarker.getLatLng();
+                form.lat.value = pos.lat.toFixed(6);
+                form.lon.value = pos.lng.toFixed(6);
+            });
+
+            reportMap.on('click', (e) => {
+                reportMarker.setLatLng(e.latlng);
+                form.lat.value = e.latlng.lat.toFixed(6);
+                form.lon.value = e.latlng.lng.toFixed(6);
+            });
+        }, 100);
+    } else {
+        setTimeout(() => reportMap.invalidateSize(), 100);
+    }
+}
+
+function closeReportModal() {
+    document.getElementById('report-modal').classList.remove('active');
+    document.getElementById('modal-overlay').classList.remove('active');
+}
+
+async function handleSightingSubmit(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const localTime = new Date(formData.get('sighting_time'));
+    formData.set('sighting_time', localTime.toISOString());
+
+    try {
+        const response = await fetch(`${API_BASE}/api/sightings`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            showNotification('Sighting reported successfully!', 'success');
+            form.reset();
+
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            form.sighting_time.value = now.toISOString().slice(0, 16);
+
+            form.lat.value = DEFAULT_CENTER[0];
+            form.lon.value = DEFAULT_CENTER[1];
+            if (reportMarker) reportMarker.setLatLng(DEFAULT_CENTER);
+
+            closeReportModal();
+            loadSightingsDropdown();
+            loadFeed();
+        } else {
+            showNotification('Error submitting sighting', 'error');
+        }
+    } catch (error) {
+        console.error('Error submitting sighting:', error);
+        showNotification('Error submitting sighting', 'error');
+    }
+}
+
+// Notifications
+function showNotification(message, type = 'info') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type} show`;
+
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=SkyRewind Merged Aircraft Recorder
+After=network.target skyrewind-merged-aircraft-proxy.service
+
+[Service]
+Type=simple
+User=skyrewind
+Group=skyrewind
+WorkingDirectory=/opt/skyrewind-merged
+ExecStart=/opt/skyrewind-merged/venv/bin/python3 services/recorder.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

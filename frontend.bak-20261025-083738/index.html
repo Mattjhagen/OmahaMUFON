@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKYREWIND UAP TRACKING NETWORK</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <div id="root">
+        <!-- Top Status Bar -->
+        <div class="header">
+            <div class="header-left">
+                <span class="header-title">🛸 SKYREWIND UAP TRACKING NETWORK</span>
+            </div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span>ADS-B</span>
+                </div>
+                <div class="status-indicator">
+                    <span>AIRCRAFT: <span id="aircraft-count">0</span></span>
+                </div>
+                <div class="status-indicator">
+                    <span>REPORTS: <span id="reports-count">0</span></span>
+                </div>
+                <div class="status-indicator">
+                    <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div class="left-column">
+                <!-- SIGHTING TYPES Panel -->
+                <div class="panel">
+                    <div class="panel-title">SIGHTING TYPES</div>
+                    <div class="panel-content" id="sighting-types"></div>
+                </div>
+
+                <!-- FLIGHTS Panel -->
+                <div class="panel">
+                    <div class="panel-title">FLIGHTS</div>
+                    <div class="panel-content" id="flights-panel">
+                        <div class="stat-large" id="flights-count">0</div>
+                        <div class="stat-label">Live Aircraft</div>
+                    </div>
+                </div>
+
+                <!-- UAP REPORTS List -->
+                <div class="panel panel-flex">
+                    <div class="panel-title">UAP REPORTS (<span id="reports-count-panel">0</span>)</div>
+                    <div class="panel-content" id="reports-list"></div>
+                </div>
+            </div>
+
+            <!-- CENTER COLUMN - Map + Detail -->
+            <div class="center-column">
+                <!-- Map -->
+                <div class="panel panel-map">
+                    <div id="map"></div>
+                    <!-- Rewind Controls -->
+                    <div class="rewind-controls">
+                        <select id="sighting-select">
+                            <option value="">Select a sighting to rewind...</option>
+                        </select>
+                        <input type="range" id="time-slider" min="-10" max="10" value="0" step="0.5">
+                        <span id="time-offset">0 min</span>
+                        <label>Radius:
+                            <select id="search-radius">
+                                <option value="10">10 mi</option>
+                                <option value="25" selected>25 mi</option>
+                                <option value="50">50 mi</option>
+                                <option value="100">100 mi</option>
+                            </select>
+                        </label>
+                        <button id="load-sighting-btn" class="btn-small">Load Sighting</button>
+                        <button id="report-btn" class="btn-primary">Report Sighting</button>
+                    </div>
+                </div>
+
+                <!-- ACTIVE SIGHTING Detail Panel -->
+                <div class="panel panel-detail">
+                    <div class="panel-title">
+                        ACTIVE SIGHTING
+                        <span class="panel-nav">
+                            <button class="btn-nav" id="prev-btn">◀ PREV</button>
+                            <button class="btn-nav" id="next-btn">NEXT ▶</button>
+                        </span>
+                    </div>
+                    <div class="panel-content" id="active-sighting">
+                        <div class="empty-state">No sightings loaded. Click a report or select from the map.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN - GROUP CHAT -->
+            <div class="panel panel-chat">
+                <div class="panel-title">GROUP CHAT</div>
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-container">
+                    <input type="text" id="chat-name" placeholder="Display Name" maxlength="30">
+                    <input type="text" id="chat-message" placeholder="Message" maxlength="200">
+                    <button id="chat-send-btn" class="btn-chat">SEND</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM STRIP - USER SUBMITTED PHOTOS -->
+        <div class="panel panel-photos">
+            <div class="panel-title">USER SUBMITTED PHOTOS</div>
+            <div class="photo-strip" id="photo-strip">
+                <div class="empty-state-photos">No photos submitted yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Form Modal -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="modal" id="report-modal">
+        <div class="modal-header">
+            <span>Report UAP Sighting</span>
+            <button class="modal-close" id="modal-close">×</button>
+        </div>
+        <div class="modal-content">
+            <form id="report-form">
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" name="reporter_name" required maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label>Sighting Type</label>
+                    <select name="type" required>
+                        <option value="">Select type...</option>
+                        <option value="Sphere/Orb">Sphere/Orb</option>
+                        <option value="Disc">Disc</option>
+                        <option value="Triangle">Triangle</option>
+                        <option value="Cylinder">Cylinder</option>
+                        <option value="Rectangle">Rectangle</option>
+                        <option value="Diamond">Diamond</option>
+                        <option value="Formation">Formation</option>
+                        <option value="Light">Light</option>
+                        <option value="Fireball">Fireball</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date & Time</label>
+                        <input type="datetime-local" name="sighting_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration</label>
+                        <input type="text" name="duration" placeholder="e.g., 30 seconds">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Latitude</label>
+                        <input type="number" name="lat" step="0.000001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude</label>
+                        <input type="number" name="lon" step="0.000001" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Location Description</label>
+                    <input type="text" name="location_text" placeholder="e.g., Near downtown Omaha">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Bearing (°)</label>
+                        <input type="number" name="bearing" min="0" max="360">
+                    </div>
+                    <div class="form-group">
+                        <label>Elevation (°)</label>
+                        <input type="number" name="elevation" min="0" max="90">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Description / Notes</label>
+                    <textarea name="description" rows="4" required maxlength="1000"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Photo (optional, jpg/png, max 10MB)</label>
+                    <input type="file" name="photo" accept="image/jpeg,image/png">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+                    <button type="submit" class="btn-primary">Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Photo Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-content">
+            <button class="lightbox-close" id="lightbox-close">×</button>
+            <img id="lightbox-img" src="" alt="">
+            <div class="lightbox-info" id="lightbox-info"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+=== Setup Instructions for Matty ===
+
+Run these commands to complete the installation:
+
+# 1. Set up data directory permissions
+sudo mkdir -p /opt/skyrewind-merged/data/uploads
+sudo chown -R skyrewind:skyrewind /opt/skyrewind-merged/data
+sudo chmod 775 /opt/skyrewind-merged/data /opt/skyrewind-merged/data/uploads
+
+# 2. Install systemd service units
+sudo cp /opt/skyrewind-merged/systemd/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 3. Enable services
+sudo systemctl enable skyrewind-merged-aircraft-proxy.service
+sudo systemctl enable skyrewind-merged-recorder.service
+sudo systemctl enable skyrewind-merged-web.service
+
+# 4. Start services
+sudo systemctl start skyrewind-merged-aircraft-proxy
+sudo systemctl start skyrewind-merged-recorder
+sudo systemctl start skyrewind-merged-web
+
+# 5. Check status
+sudo systemctl status skyrewind-merged-aircraft-proxy
+sudo systemctl status skyrewind-merged-recorder
+sudo systemctl status skyrewind-merged-web
+
+# 6. View logs
+journalctl -u skyrewind-merged-aircraft-proxy --since "2 minutes ago"
+journalctl -u skyrewind-merged-recorder --since "2 minutes ago"
+journalctl -u skyrewind-merged-web --since "2 minutes ago"
+
+# Web interface will be available at:
+# http://localhost:5003

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SkyRewind - Aircraft Tracking & Sighting Reports</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#0B1220">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SkyRewind">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <div class="logo-mark">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z" />
+                </svg>
+            </div>
+            <div class="header-branding">
+                <div class="header-title-row">
+                    <h1 class="header-title">SkyRewind</h1>
+                    <div class="status-dot" id="status-dot"></div>
+                </div>
+                <p class="header-tagline">Aircraft Tracking Network</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="icon-btn" id="notify-toggle" title="Turn on sighting notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+            </button>
+            <button class="icon-btn" id="theme-toggle" title="Toggle theme">
+                <svg class="theme-icon sun-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <svg class="theme-icon moon-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+            </button>
+            <button class="icon-btn" id="info-btn" title="Information">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- View Toggle Bar -->
+    <div class="view-toggle-bar">
+        <div class="view-toggle">
+            <button class="view-toggle-btn active" data-view="map">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Map
+            </button>
+            <button class="view-toggle-btn" data-view="feed">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Feed
+            </button>
+        </div>
+        <button class="btn-primary" id="report-btn">Report Sighting</button>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <div class="hero-content">
+                <div class="hero-left">
+                    <div class="hero-eyebrow">SKY WATCH • ADS-B • OMAHA, NE</div>
+                    <h1 class="hero-title">Live Sky Over Omaha</h1>
+                    <p class="hero-description">Real ADS-B traffic over Omaha, logged for 30 days so you can rewind any sighting and check for a known aircraft.</p>
+                </div>
+                <div class="hero-right">
+                    <div class="receiver-card" id="receiver-card">
+                        <div class="receiver-status" id="receiver-status">OFFLINE</div>
+                        <div class="receiver-details">
+                            <div class="receiver-row">
+                                <span class="receiver-label">Source</span>
+                                <span class="receiver-value">FR24 + OpenSky</span>
+                            </div>
+                            <div class="receiver-row">
+                                <span class="receiver-label">Coverage</span>
+                                <span class="receiver-value">Omaha Area</span>
+                            </div>
+                            <div class="receiver-row">
+                                <span class="receiver-label">Aircraft</span>
+                                <span class="receiver-value" id="receiver-aircraft">0</span>
+                            </div>
+                            <div class="receiver-row">
+                                <span class="receiver-label">Last update</span>
+                                <span class="receiver-value" id="receiver-last-update">never</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-label">Aircraft Tracked</div>
+                <div class="stat-value" id="stat-aircraft">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Last Update</div>
+                <div class="stat-value" id="stat-updated">never</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Location</div>
+                <div class="stat-value" id="stat-grid">Omaha, NE / Grid EN09xv</div>
+            </div>
+        </div>
+
+        <!-- Map View -->
+        <div class="view-content active" id="map-view">
+            <!-- Control Bar -->
+            <div class="control-bar">
+                <div class="control-group">
+                    <label class="control-label">Sighting</label>
+                    <select id="sighting-select" class="control-select">
+                        <option value="">Select sighting...</option>
+                    </select>
+                    <button class="btn-secondary" id="load-sighting-btn">Load</button>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Radius</label>
+                    <input type="number" id="search-radius" class="control-input" value="25" min="1" max="100" step="1" style="width: 80px;">
+                    <span class="control-unit">mi</span>
+                </div>
+                <div class="time-slider-group">
+                    <label class="control-label">Time</label>
+                    <input type="range" id="time-slider" min="-10" max="10" value="0" step="0.5">
+                    <span id="time-offset">±0 min</span>
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div id="map-container"></div>
+
+            <!-- Live Status Strip (shown when no sighting loaded) -->
+            <div class="live-status-strip" id="live-status-strip">
+                <span id="live-count">0 aircraft tracked</span>
+                <span id="live-last-update">Last update: never</span>
+            </div>
+
+            <!-- Match Results Panel -->
+            <div class="match-panel" id="match-panel" style="display: none;">
+                <div class="match-panel-header">
+                    <h3 class="match-panel-title">Rewind & Match</h3>
+                </div>
+                <div class="match-list" id="match-list"></div>
+            </div>
+        </div>
+
+        <!-- Feed View -->
+        <div class="view-content" id="feed-view">
+            <!-- Search and Filter -->
+            <div class="search-filter-bar">
+                <input type="text" id="sighting-search" class="search-input" placeholder="Search sightings by reporter, description, or callsign…">
+                <div class="filter-pills">
+                    <button class="filter-pill active" data-filter="all" title="Show all sightings">All</button>
+                    <button class="filter-pill" data-filter="live" title="Show sightings from the last 24 hours">Live</button>
+                    <button class="filter-pill" data-filter="rewind" title="Show sightings older than 24 hours">Rewind</button>
+                    <button class="filter-pill" data-filter="nomatch" title="Show sightings with no ADS-B matches found">No ADS-B match</button>
+                </div>
+            </div>
+            <div class="feed-container">
+                <div class="feed-header">
+                    <div class="feed-header-left">
+                        <div class="live-badge">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            LIVE
+                        </div>
+                        <h3 class="feed-title">Sighting Reports</h3>
+                    </div>
+                    <span class="feed-count" id="feed-count">0 Sightings</span>
+                </div>
+                <div class="feed-list no-scrollbar" id="feed-list">
+                    <div class="feed-empty">
+                        <div class="feed-empty-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                            </svg>
+                        </div>
+                        <p class="feed-empty-title">No sighting reports yet</p>
+                        <p class="feed-empty-subtitle">Submit the first report to begin tracking</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>Data: ADS-B (FR24) + API (OpenSky) • © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
+    </footer>
+
+    <!-- Report Form Modal -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="modal" id="report-modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Report Sighting</h2>
+            <button class="modal-close" id="modal-close-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="sighting-form">
+                <div class="form-group">
+                    <label class="form-label">Your Name *</label>
+                    <input type="text" name="reporter_name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date & Time (Local) *</label>
+                    <input type="datetime-local" name="sighting_time" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Location (Click map to set) *</label>
+                    <input type="text" name="location_text" class="form-input" placeholder="Describe location (optional)">
+                </div>
+                <div class="form-row-half">
+                    <div class="form-group">
+                        <label class="form-label">Latitude *</label>
+                        <input type="number" name="lat" step="any" class="form-input" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Longitude *</label>
+                        <input type="number" name="lon" step="any" class="form-input" required readonly>
+                    </div>
+                </div>
+                <div id="report-map-modal" class="map-modal"></div>
+                <div class="form-row-half">
+                    <div class="form-group">
+                        <label class="form-label">Altitude (ft)</label>
+                        <input type="number" name="altitude" class="form-input" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Bearing (°)</label>
+                        <input type="number" name="bearing" min="0" max="359" class="form-input" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description *</label>
+                    <textarea name="description" class="form-textarea" rows="3" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Photo (optional, max 10MB)</label>
+                    <input type="file" name="photo" class="form-input" accept="image/*">
+                </div>
+                <button type="submit" class="btn-submit">Submit Report</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div class="info-modal" id="info-modal">
+        <div class="info-modal-content">
+            <button class="modal-close" id="info-close-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <h2>About SkyRewind</h2>
+            <p>SkyRewind is a local aircraft tracking and sighting reporting system. It logs ADS-B position data from aircraft broadcasting their location, stores it for 30 days, and allows you to "rewind" historical traffic to match against sighting reports.</p>
+            <h3>How It Works</h3>
+            <ul>
+                <li><strong>Live Map:</strong> View real-time aircraft positions from ADS-B receivers</li>
+                <li><strong>Report Sighting:</strong> Log observations with time, location, and description</li>
+                <li><strong>Rewind & Match:</strong> Replay historical traffic to identify candidate aircraft</li>
+            </ul>
+            <h3>Important Note</h3>
+            <p>When a sighting has "No ADS-B match found," it only means no cooperative aircraft broadcasting ADS-B were detected in the specified area and time window. Many aircraft do not broadcast ADS-B, and reception depends on line-of-sight and equipment limitations.</p>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="static/app.js"></script>
+</body>
+</html>
